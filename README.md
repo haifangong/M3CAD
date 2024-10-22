@@ -43,19 +43,12 @@ To train the generation model and generate novel AMP sequences:
 
 1. **Training the Generation Model**
 
-   Navigate to the `generation` folder and execute the `train.sh` script:
-   ```
-   cd generation
-   ./train.sh
-   ```
+   Navigate to the `generation` folder and execute the `train.sh` script
 
 2. **Generating Sequences**
 
-Once training is complete, use the `sample.sh` script to generate sequences:
+Once training is complete, use the `sample.sh` script to generate sequences
 
-    ```
-    ./sample.sh
-    ```
 ### Identification
 
 To train the identification model responsible for predicting antimicrobial properties and mechanisms:
@@ -84,7 +77,7 @@ The M3-CAD pipeline has successfully designed **QL-AMP-1**, an AMP with four dis
 ## Citation
 
 If you find this project useful, please consider cite the following paper:
-
+```
 @article{wang2024novo,
     title={De novo multi-mechanism antimicrobial peptide design via multimodal deep learning},
     author={Wang, Yue and Gong, Haifan and Li, Xiaojuan and Li, Lixiang and Zhao, Yinuo and Bao, Peijing and Kong, Qingzhou and Wan, Boyao and Zhang, Yumeng and Zhang, Jinghui and others},
@@ -93,3 +86,4 @@ If you find this project useful, please consider cite the following paper:
     year={2024},
     publisher={Cold Spring Harbor Laboratory}
 }
+```
