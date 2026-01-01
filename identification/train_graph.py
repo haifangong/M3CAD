@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 from torch_geometric.loader import DataLoader
 from torchmetrics import Accuracy, F1Score, AveragePrecision, AUROC
 
@@ -131,7 +132,7 @@ def main(args):
         best_fold_metrics = None
         weights_path = os.path.join(weight_dir, f"model_{fold + 1}.pth")
 
-        for epoch in range(1, args.epochs + 1):
+        for epoch in tqdm(range(1, args.epochs + 1)):
             train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
             res = evaluate(model, valid_loader, metrics, device)
             
@@ -160,8 +161,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='ThermoGNN Training')
-    parser.add_argument('--task', type=str, default='toxin')
+    parser = argparse.ArgumentParser(description='GNN Training')
+    parser.add_argument('--task', type=str, default='anti')
     parser.add_argument('--classes', type=int, default=6)
     parser.add_argument('--split', type=int, default=5)
     parser.add_argument('--seed', type=int, default=1)
