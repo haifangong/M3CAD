@@ -5,26 +5,17 @@
 Artificial Intelligence (AI)-driven discovery of antimicrobial peptides (AMPs) has significant potential in combating multidrug-resistant organisms (MDROs). However, existing approaches often overlook the three-dimensional (3D) structural characteristics, species-specific antimicrobial activities, and underlying mechanisms of AMPs.
 
 **M3-CAD** (Multimodal, Multitask, Multilabel, and Conditionally Controlled AMP Discovery) is a cutting-edge pipeline designed to address these challenges. Leveraging the comprehensive **QLAPD** database, which comprises the sequences, structures, and antimicrobial properties of 12,914 AMPs, M3-CAD facilitates the de novo design of multi-mechanism AMPs with enhanced efficacy and reduced toxicity.
+M3CAD is a deep learning framework for the design and identification of Antimicrobial Peptides (AMPs). It leverages multimodal learning by combining 1D sequence information with 3D structural (voxel) data to improve the generation of novel peptides and the prediction of their properties.
 
-### Key Features
+The repository is structured into two main modules:
+1.  **Generation**: A Generative Model (VAE/WAE) to design novel AMP sequences conditioned on specific properties.
+2.  **Identification**: A Classification/Regression Model to predict properties (e.g., antimicrobial activity, toxicity) of peptide sequences.
 
-- **Multimodal Integration**: Combines sequence data with 3D structural information using an innovative 3D voxel coloring method to capture the nuanced physicochemical context of amino acids.
-- **Multitask Learning**: Simultaneously addresses multiple prediction tasks, including antimicrobial activity, toxicity, and mechanism classification.
-- **Multilabel Classification**: Enables the prediction of multiple antimicrobial mechanisms for each peptide.
-- **Conditionally Controlled Generation**: Allows for the design of AMPs tailored to specific microbial species and desired mechanisms of action.
-- **Comprehensive Database**: Utilizes the `QLAPD` database, ensuring robust training and validation of models.
+---
 
-## Pipeline Components
-
-The M3-CAD pipeline integrates three primary modules:
-
-1. **Generation Module**: Generates novel AMP sequences with desired properties.
-2. **Regression Module**: Predicts continuous properties such as toxicity levels.
-3. **Classification Module**: Classifies antimicrobial mechanisms and species-specific activities.
+## 🚀 Getting Started
 
 By integrating these modules, M3-CAD significantly enhances the structural characterization and functional prediction of AMPs, facilitating the discovery of candidates like **QL-AMP-1**, which exhibits four antimicrobial mechanisms with low toxicity and high efficacy against MDROs.
-
-## Installation
 
 ### Requirements
 
@@ -49,13 +40,108 @@ To train the generation model and generate novel AMP sequences:
 
 Once training is complete, use the `sample.sh` script to generate sequences
 
-### Identification
+## 🧬 Generation Module
 
-To train the identification model responsible for predicting antimicrobial properties and mechanisms:
+The **Generation** module focuses on creating new peptide sequences. It supports Variational Autoencoders (VAE) and Wasserstein Autoencoders (WAE) with support for both sequence-only and multimodal (sequence + voxel) inputs.
 
-**Training the Identification Model**
+### Directory Structure (`generation/`)
+- `train.py`: Main script for training the generative models.
+- `eval.py`: Script for generating sequences using trained models.
+- `model.py`: Definitions of model architectures (`SEQVAE`, `MMVAE`, `SEQWAE`, `MMWAE`).
+- `dataset.py`: Data loading utilities for generation tasks.
+- `inference.ipynb`: Jupyter Notebook for interactive generation and analysis.
 
-Execute the `train.sh` script located in the Identification directory.
+### Training
+
+To train a new generative model, use `train.py`.
+
+**Example: Train a Sequence-based VAE**
+```bash
+cd generation
+python train.py --gen_model vae --model seq --epoch 200
+```
+
+**Arguments:**
+- `--gen_model`: Type of generative model (`vae` or `wae`).
+- `--model`: Architecture type (`seq` for sequence-only, `mm_unet` or `mm_mt` for multimodal).
+- `--epoch`: Number of training epochs.
+
+### Inference / Generation
+
+To generate new peptides using a pre-trained model:
+
+**Option 1: Command Line**
+```bash
+cd generation
+python eval.py --gen_model vae --model seq --weight_path runs/checkpoints/seq1/weights/best.pth
+```
+
+**Option 2: Interactive Notebook**
+Open `generation/inference.ipynb` in Jupyter. This notebook allows you to:
+- Load a trained model.
+- Define target conditions (e.g., specific property values).
+- Generate sequences and visualize the latent space.
+
+---
+
+## 🔍 Identification Module
+
+The **Identification** module predicts the properties of peptides, such as whether they are antimicrobial or toxic. It uses 3D ResNets for structural data and RNNs/Transformers for sequence data.
+
+### Directory Structure (`identification/`)
+- `train.py`: Script to train classification or regression models.
+- `inference.py`: Script for running predictions on new datasets.
+- `network.py`: Definitions of prediction models (`MMPeptide`, `VoxPeptide`, `ResNet3D`).
+- `dataset.py`: Data loading for identification tasks.
+- `inference.ipynb`: Jupyter Notebook for interactive prediction.
+
+### Training
+
+To train an identification model (e.g., for antimicrobial activity prediction):
+
+```bash
+cd identification
+python train.py --task anti --epoch 100
+```
+
+**Arguments:**
+- `--task`: The target property to predict (e.g., `anti` for antimicrobial, `tox` for toxicity).
+- `--epoch`: Number of training epochs.
+- *(Check `train.py` arguments for more options like learning rate, batch size, etc.)*
+
+### Inference
+
+To predict properties for a list of sequences:
+
+**Option 1: Interactive Notebook**
+Open `identification/inference.ipynb`. This notebook demonstrates how to:
+- Load the model and tokenizer.
+- Input a list of peptide sequences.
+- Obtain prediction scores (probabilities or regression values).
+
+**Option 2: Script**
+(If available) Use `inference.py` to process a CSV or FASTA file of sequences.
+
+---
+
+## 📂 Project Layout
+
+```
+M3CAD/
+├── get_data.py          # Script to download data/models
+├── README.md            # This file
+├── generation/          # Code for designing novel AMPs
+│   ├── model.py         # VAE/WAE architectures
+│   ├── train.py         # Training loop for generation
+│   ├── eval.py          # Generation/Evaluation script
+│   └── ...
+└── identification/      # Code for property prediction
+    ├── network.py       # Classification/Regression architectures
+    ├── train.py         # Training loop for identification
+    ├── inference.py     # Inference script
+    └── ...
+```
+
 
 ## Checkpoints
 
