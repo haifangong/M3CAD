@@ -128,7 +128,6 @@ Open `identification/inference.ipynb`. This notebook demonstrates how to:
 
 ```
 M3CAD/
-├── get_data.py          # Script to download data/models
 ├── README.md            # This file
 ├── generation/          # Code for designing novel AMPs
 │   ├── model.py         # VAE/WAE architectures
