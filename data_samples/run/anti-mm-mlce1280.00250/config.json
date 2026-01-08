@@ -1,0 +1,1 @@
+{"model": "mm", "fusion": "1", "task": "anti", "classes": 6, "split": 5, "seed": 1, "gnn_type": "gat", "batch_size": 128, "epochs": 50, "lr": 0.002, "decay": 0.0005, "warm_steps": 0, "patience": 25, "loss": "mlce", "metric": "multilabel", "pretrain": ""}
