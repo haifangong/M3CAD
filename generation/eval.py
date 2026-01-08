@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 import torch
 
@@ -18,24 +19,35 @@ def calculate_mean_std(property_list, property_name):
 
 
 def generate(args):
-    path = 'results/' + args.gen_model + '-' + args.model + str(args.condition)
+    if hasattr(args, 'run_name') and args.run_name is not None:
+        save_dir = f"results_{args.run_name}"
+        os.makedirs(save_dir, exist_ok=True)
+        path = os.path.join(save_dir, 'eval_untemplated')
+    elif hasattr(args, 'save_dir') and args.save_dir is not None:
+        os.makedirs(args.save_dir, exist_ok=True)
+        path = os.path.join(args.save_dir, 'eval_untemplated')
+    else:
+        path = 'results/' + args.gen_model + '-' + args.model + '_' + str(args.condition)
+        # Ensure results directory exists
+        os.makedirs('results', exist_ok=True)
+    
     gen = open(path + '_seq.fasta', 'w')
     gen_info = open(path + '_properties.csv', 'w')
 
     if args.gen_model == 'vae':
         if args.model == 'seq':
-            model = SEQVAE(args.classes, sequence_length=args.seq_length).cuda()
+            model = SEQVAE(args.classes, sequence_length=args.seq_length, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
         elif args.model == 'mm_unet':
-            model = MMVAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=True).cuda()
+            model = MMVAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=True, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
         elif args.model == 'mm_mt':
-            model = MMVAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=False).cuda()
+            model = MMVAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=False, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
     elif args.gen_model == 'wae':
         if args.model == 'seq':
-            model = SEQWAE(args.classes, sequence_length=args.seq_length).cuda()
+            model = SEQWAE(args.classes, sequence_length=args.seq_length, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
         elif args.model == 'mm_unet':
-            model = MMWAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=True).cuda()
+            model = MMWAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=True, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
         elif args.model == 'mm_mt':
-            model = MMWAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=False).cuda()
+            model = MMWAE(args.classes, sequence_length=args.seq_length, use_encoder_feature=False, use_augmentation=args.use_augmentation, mask_prob=args.mask_prob).cuda()
 
     model.load_state_dict(torch.load(args.weight_path))
     model.eval()
@@ -102,9 +114,13 @@ def generate(args):
             pred_seq = [idx2ama[idx.item()] for idx in valid_indices]
             seq_str = ''.join(pred_seq)
 
-            # Check if the sequence is unique
-            if seq_str not in seq_cache:
-                print(f'Count: {count} | Sequence: {seq_str}')
+            # Check sequence length: must be between 6 and 20 (inclusive)
+            if len(seq_str) < 6 or len(seq_str) > 20:
+                continue
+
+            # Check if the sequence is unique and not empty
+            if seq_str and seq_str not in seq_cache:
+                # print(f'Count: {count} | Sequence: {seq_str}')
 
                 # Calculate properties
                 properties = calculate_property(seq_str)
@@ -128,22 +144,50 @@ def generate(args):
                 if count >= args.gen_number:
                     break  # Break out if we've reached the desired count
 
-    # After generation loop, calculate mean and std for each property
-    print('\n--- Property Statistics of Generated Sequences ---')
+    # After generation loop, calculate analysis for targeted functional properties
+    print('\n--- Functional Property Analysis ---')
+    path_stats = path + '_property_stats.txt'
+    
+    target_properties = {
+        'Stability': 'Instability Index',
+        'Amphiphilicity': 'Hydrophobic Moment',
+        'Thermal Stability': 'Aliphatic Index',
+        'Structural Clarity': 'Alpha Helix Fraction'
+    }
 
-    with open(path+'_property_stats.txt', 'w') as stats_file:
-        for prop_name in property_names:
+    with open(path_stats, 'w') as stats_file:
+        stats_file.write("--- Functional Property Analysis ---\n")
+        for label, prop_name in target_properties.items():
             prop_values = property_lists[prop_name]
-            mean, std = calculate_mean_std(prop_values, prop_name)
-            if mean is not None and std is not None:
-                stats_file.write(f'{prop_name}: Mean = {mean:.4f}, Std = {std:.4f}\n')
+            if prop_values:
+                mean = sum(prop_values) / len(prop_values)
+                variance = sum((x - mean) ** 2 for x in prop_values) / len(prop_values)
+                std = variance ** 0.5
+                
+                line = f"{label} ({prop_name}): Mean = {mean:.4f}, Std = {std:.4f}"
+                print(line)
+                stats_file.write(line + "\n")
+            else:
+                line = f"{label} ({prop_name}): No data"
+                print(line)
+                stats_file.write(line + "\n")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='GOOD')
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')
+
     parser.add_argument('--gen_model', type=str, default='vae',
                         help='vae or wae')
-    parser.add_argument('--seq_length', type=int, default=20,
+    parser.add_argument('--seq_length', type=int, default=30,
                         help="Max length of peptides")
     parser.add_argument('--model', type=str, default='mm_unet',
                         help='seq, mm_unet, or mm_mt')
@@ -155,6 +199,14 @@ if __name__ == "__main__":
                         help='Condition as a binary string, e.g., 1111, 1101')
     parser.add_argument('--gen_number', type=int, default=1000,
                         help='Generated sample count')
+    parser.add_argument('--use_augmentation', type=str2bool, default=True,
+                        help="whether to use random_mask_and_shift augmentation (default: True)")
+    parser.add_argument('--mask_prob', type=float, default=0.1,
+                        help="substitution probability for random_mask_and_shift (default: 0.1)")
+    parser.add_argument('--save_dir', type=str, default=None,
+                        help='Directory to save evaluation results')
+    parser.add_argument('--run_name', type=str, default=None,
+                        help='Name of the run for results directory results_xxx')
 
     args = parser.parse_args()
     generate(args)

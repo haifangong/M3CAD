@@ -436,7 +436,7 @@ class SeqDecoder(nn.Module):
             gru_hidden_size=32,  # Hidden size for GRU
             gru_num_layers=1,  # Number of GRU layers
             output_dim=22,  # Number of classes (22 classes)
-            sequence_length=20,  # Sequence length
+            sequence_length=30,  # Sequence length
             dropout=0.2  # Dropout rate for GRU layers (if num_layers > 1)
     ):
         """
@@ -518,10 +518,19 @@ class SeqDecoder(nn.Module):
 
 
 class SEQVAE(nn.Module):
-    def __init__(self, classes, latent_size=32, sequence_length=30):
+    """
+    Sequence-based Variational Autoencoder (SEQVAE).
+    
+    This model encodes peptide sequences into a latent space and reconstructs them, 
+    conditioned on properties (classes). It uses a sequence encoder and decoder 
+    with a classification head.
+    """
+    def __init__(self, classes, latent_size=32, sequence_length=30, use_augmentation=True, mask_prob=0.1):
         super().__init__()
         self.latent_size = latent_size
         self.sequence_length = sequence_length
+        self.use_augmentation = use_augmentation
+        self.mask_prob = mask_prob
         # Initialize the sequential encoder
         self.seq_encoder = SeqEncoder(sequence_length=sequence_length, embedding_dim=latent_size)
         self.cls_head = nn.Sequential(
@@ -551,18 +560,33 @@ class SEQVAE(nn.Module):
         self.linear_log_var = nn.Linear(latent_size, latent_size)
 
     def reparameterize(self, mu, log_var):
+        """
+        Reparameterization trick to sample z from N(mu, var).
+        """
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
         return mu + eps * std
 
     def inference(self, z, c):
+        """
+        Generate sequences from latent vector z and condition c.
+        
+        Args:
+            z (torch.Tensor): Latent vector.
+            c (torch.Tensor): Condition vector (e.g., target properties).
+            
+        Returns:
+            tuple: (Indices of generated sequence, String representation, Raw indices tensor)
+        """
         batch_size = z.size(0)
         device = z.device
 
         # Compute condition embedding
         cond_f = self.csn(torch.cat((z, c), dim=-1))  # Shape: (batch_size, embedding_dim)
 
-        allowed_indices = torch.tensor([1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], device=device)
+        # allowed_indices = torch.tensor([1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], device=device)
+        # allowed_indices = torch.tensor([1, 5, 8, 9, 10, 15, 18, 19, 20], device=device)
+        allowed_indices = torch.tensor([1, 5, 8, 9, 10, 11, 13, 14, 15, 18, 19, 20], device=device)
         num_allowed = allowed_indices.size(0)
 
         # Define minimum and maximum sequence lengths
@@ -607,6 +631,16 @@ class SEQVAE(nn.Module):
 
 
     def forward(self, x, y):
+        """
+        Forward pass for training.
+        
+        Args:
+            x (tuple): Input data (voxel, seq). voxel is ignored in SEQVAE.
+            y (torch.Tensor): Ground truth labels/properties.
+            
+        Returns:
+            tuple: (Reconstructed sequence, Classification result, Mean, Log Var, Condition feature)
+        """
         batch_size = x[1].shape[0]
         # Encode the sequential features
         seq_feature, gru_out = self.seq_encoder(x[1])
@@ -627,7 +661,10 @@ class SEQVAE(nn.Module):
         cond_f = self.csn(torch.cat((z, y), dim=-1))  # Shape: (batch_size, latent_size)
 
         # Decode the sequential reconstruction with sequence
-        x_noisy = random_mask_and_shift(x[1].squeeze(1).long())
+        if self.use_augmentation:
+            x_noisy = random_mask_and_shift(x[1].squeeze(1).long(), mask_prob=self.mask_prob)
+        else:
+            x_noisy = x[1].squeeze(1).long()
         seq_one_hot = F.one_hot(x_noisy, num_classes=22).float()  # Shape: (batch_size, 50, 21)
         seq_rec = self.seq_decoder(seq_one_hot, cond_f)  # Shape depends on SeqDecoder implementation
 
@@ -635,10 +672,18 @@ class SEQVAE(nn.Module):
 
 
 class MMVAE(nn.Module):
-    def __init__(self, classes, latent_size=32, use_encoder_feature=True, sequence_length=30):
+    """
+    Multimodal Variational Autoencoder (MMVAE).
+    
+    This model utilizes both voxel (3D structure) and sequence data. It encodes both modalities 
+    into a shared latent space and reconstructs both, conditioned on properties.
+    """
+    def __init__(self, classes, latent_size=32, use_encoder_feature=True, sequence_length=30, use_augmentation=True, mask_prob=0.1):
         super().__init__()
         self.latent_size = latent_size
         self.sequence_length = sequence_length
+        self.use_augmentation = use_augmentation
+        self.mask_prob = mask_prob
         self.vox_embedding_dim = latent_size * 16
         self.vox_encoder = resnet26(classes, embedding_dim=latent_size)
         self.seq_encoder = SeqEncoder(sequence_length=sequence_length, embedding_dim=latent_size)
@@ -667,11 +712,22 @@ class MMVAE(nn.Module):
         self.linear_log_var = nn.Linear(latent_size, latent_size)
 
     def reparameterize(self, mu, log_var):
+        """Reparameterize to sample z."""
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std)
         return mu + eps * std
 
     def inference(self, z, c):
+        """
+        Generate sequences from latent vector z and condition c.
+        
+        Args:
+            z (torch.Tensor): Latent vector.
+            c (torch.Tensor): Condition vector.
+            
+        Returns:
+            tuple: (Indices of generated sequence, String representation, Raw indices tensor)
+        """
         batch_size = z.size(0)
         device = z.device
 
@@ -680,7 +736,9 @@ class MMVAE(nn.Module):
         vox_cond, seq_cond = cond_f[..., :self.vox_embedding_dim], cond_f[..., self.vox_embedding_dim:]
 
         # Define allowed amino acid indices (excluding D=15 and E=16)
-        allowed_indices = torch.tensor([1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], device=device)
+        # allowed_indices = torch.tensor([1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], device=device)
+        # allowed_indices = torch.tensor([1, 5, 8, 9, 10, 15, 18, 19, 20], device=device)
+        allowed_indices = torch.tensor([1, 5, 8, 9, 10, 11, 13, 14, 15, 18, 19, 20], device=device)
         num_allowed = allowed_indices.size(0)
 
         # Define minimum and maximum sequence lengths
@@ -723,8 +781,66 @@ class MMVAE(nn.Module):
 
         return recon_seq_indices, sequences_strings, sequences
 
+    def inference_template(self, z, c, template):
+        """
+        Generate sequences based on a template.
+        """
+        batch_size = z.size(0)
+        device = z.device
+
+        # Compute condition embedding
+        cond_f = self.csn(torch.cat((z, c), dim=-1))  # Shape: (batch_size, embedding_dim)
+        vox_cond, seq_cond = cond_f[..., :self.vox_embedding_dim], cond_f[..., self.vox_embedding_dim:]
+
+        sampled_aas = template.repeat(batch_size, 1)
+
+        # Define minimum and maximum sequence lengths
+        min_len = self.sequence_length // 2
+        max_len = self.sequence_length - 1
+
+        # Randomly generate sequence lengths for the batch
+        lengths = torch.randint(min_len, max_len + 1, (batch_size,), device=device)  # Shape: (batch_size,)
+
+        # Initialize sequences with PAD (0)
+        sequences = torch.zeros(batch_size, self.sequence_length, dtype=torch.long, device=device)
+
+        # Create a mask to determine where to place sampled AAs
+        positions = torch.arange(max_len, device=device).unsqueeze(0).expand(batch_size, max_len)
+        mask = positions < lengths.unsqueeze(1)
+
+        # Assign sampled AAs to the sequences
+        sequences[:, :max_len][mask] = sampled_aas[mask]
+
+        # Insert END token (21) at the position right after the last AA if there's space
+        end_positions = lengths
+        batch_indices = torch.arange(batch_size, device=device)
+        sequences[batch_indices, end_positions] = 21  # END token
+
+        # Convert numerical sequences to string representations
+        sequences_strings = [
+            ''.join([idx2ama[idx] for idx in seq[:lengths[0]-1].tolist()]) for seq in sequences
+        ]
+
+        # One-hot encode the sequences
+        seq_one_hot = F.one_hot(sequences, num_classes=22).float()  # Shape: (batch_size, sequence_length, 22)
+
+        # Pass the one-hot encoded sequences and condition embeddings to the seq_decoder
+        recon_seq = self.seq_decoder(seq_one_hot, seq_cond)  # Shape: (batch_size, sequence_length, output_dim)
+        recon_seq_indices = torch.argmax(recon_seq, dim=-1)  # Shape: (batch_size, sequence_length)
+
+        return recon_seq_indices, sequences_strings, sequences
 
     def forward(self, x, y):
+        """
+        Forward pass for MMVAE.
+        
+        Args:
+            x (tuple): (voxel, seq)
+            y (torch.Tensor): Labels
+            
+        Returns:
+            tuple: ((Vox Recon, Seq Recon), Classification, Mean, Var, Condition)
+        """
         batch_size = x[0].shape[0]
         vox_feature = self.vox_encoder(x[0], y)
         seq_feature, _ = self.seq_encoder(x[1])
@@ -745,16 +861,26 @@ class MMVAE(nn.Module):
         vox_rec = self.vox_decoder(vox_cond.view(batch_size, self.vox_embedding_dim, 1, 1, 1), vox_feature)
 
         # Decode the sequential reconstruction with sequence
-        x_noisy = random_mask_and_shift(x[1].squeeze(1).long())
+        if self.use_augmentation:
+            x_noisy = random_mask_and_shift(x[1].squeeze(1).long(), mask_prob=self.mask_prob)
+        else:
+            x_noisy = x[1].squeeze(1).long()
         seq_one_hot = F.one_hot(x_noisy, num_classes=22).float()  # Shape: (batch_size, 50, 21)
         seq_rec = self.seq_decoder(seq_one_hot, seq_cond)  # Shape depends on SeqDecoder implementation
         return (vox_rec, seq_rec), classify_result, mean, var, cond_f
 
 
 class SEQWAE(nn.Module):
-    def __init__(self, classes, latent_size=32, sequence_length=30):
+    """
+    Sequence-based Wasserstein Autoencoder (SEQWAE).
+    
+    Similar to SEQVAE but uses Wasserstein distance for the generative loss.
+    """
+    def __init__(self, classes, latent_size=32, sequence_length=30, use_augmentation=True, mask_prob=0.1):
         super().__init__()
         self.latent_size = latent_size
+        self.use_augmentation = use_augmentation
+        self.mask_prob = mask_prob
 
         # Initialize the sequential encoder
         self.seq_encoder = SeqEncoder(sequence_length=sequence_length, embedding_dim=latent_size)
@@ -773,6 +899,9 @@ class SEQWAE(nn.Module):
         self.csn = nn.Linear(latent_size * 4 + classes, latent_size)
 
     def inference(self, z, c):
+        """
+        Generate sequences from latent vector z and condition c.
+        """
         batch_size = z.size(0)
         device = z.device
 
@@ -823,6 +952,16 @@ class SEQWAE(nn.Module):
         return recon_seq_indices, sequences_strings, sequences
 
     def forward(self, x, y):
+        """
+        Forward pass for SEQWAE.
+        
+        Args:
+            x (tuple): (voxel, seq)
+            y (torch.Tensor): Labels
+            
+        Returns:
+            tuple: (Seq Rec, Seq Feature, Latent z)
+        """
         batch_size = x[1].shape[0]
         # Encode the sequential features
         seq_feature, _ = self.seq_encoder(x[1])
@@ -838,7 +977,10 @@ class SEQWAE(nn.Module):
         cond_f = self.csn(torch.cat((z, y), dim=-1))  # Shape: (batch_size, latent_size)
 
         # Decode the sequential reconstruction with sequence
-        x_noisy = random_mask_and_shift(x[1].squeeze(1).long())
+        if self.use_augmentation:
+            x_noisy = random_mask_and_shift(x[1].squeeze(1).long(), mask_prob=self.mask_prob)
+        else:
+            x_noisy = x[1].squeeze(1).long()
         seq_one_hot = F.one_hot(x_noisy, num_classes=22).float()  # Shape: (batch_size, 50, 21)
         seq_rec = self.seq_decoder(seq_one_hot, cond_f)  # Shape depends on SeqDecoder implementation
 
@@ -847,10 +989,17 @@ class SEQWAE(nn.Module):
 
 
 class MMWAE(nn.Module):
-    def __init__(self, classes, latent_size=32, use_encoder_feature=True, sequence_length=30):
+    """
+    Multimodal Wasserstein Autoencoder (MMWAE).
+    
+    Combines voxel and sequence data using WAE framework.
+    """
+    def __init__(self, classes, latent_size=32, use_encoder_feature=True, sequence_length=30, use_augmentation=True, mask_prob=0.1):
         super().__init__()
         self.latent_size = latent_size
         self.vox_embedding_dim = latent_size * 16
+        self.use_augmentation = use_augmentation
+        self.mask_prob = mask_prob
         self.vox_encoder = resnet26(classes, embedding_dim=latent_size)
         self.seq_encoder = SeqEncoder(sequence_length=sequence_length, embedding_dim=latent_size)
         self.multi_modal_fusion = nn.Sequential(
@@ -868,6 +1017,9 @@ class MMWAE(nn.Module):
         self.csn = nn.Linear(latent_size * 4 + classes, self.vox_embedding_dim + latent_size)
 
     def inference(self, z, c):
+        """
+        Generate sequences from latent vector z and condition c.
+        """
         batch_size = z.size(0)
         device = z.device
 
@@ -920,6 +1072,16 @@ class MMWAE(nn.Module):
 
 
     def forward(self, x, y):
+        """
+        Forward pass for MMWAE.
+        
+        Args:
+            x (tuple): (voxel, seq)
+            y (torch.Tensor): Labels
+            
+        Returns:
+            tuple: ((Vox Rec, Seq Rec), Fusion Feature, Latent z)
+        """
         batch_size = x[0].shape[0]
         # Encode voxel data
         vox_feature = self.vox_encoder(x[0], y)
@@ -943,7 +1105,10 @@ class MMWAE(nn.Module):
             vox_cond.view(batch_size, self.vox_embedding_dim, 1, 1, 1), vox_feature
         )
         # Decode the sequential reconstruction with sequence
-        x_noisy = random_mask_and_shift(x[1].squeeze(1).long())
+        if self.use_augmentation:
+            x_noisy = random_mask_and_shift(x[1].squeeze(1).long(), mask_prob=self.mask_prob)
+        else:
+            x_noisy = x[1].squeeze(1).long()
         seq_one_hot = F.one_hot(x_noisy, num_classes=22).float()  # Shape: (batch_size, 50, 21)
         seq_rec = self.seq_decoder(seq_one_hot, seq_cond)  # Shape depends on SeqDecoder implementation
 
