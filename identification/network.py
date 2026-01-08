@@ -387,7 +387,7 @@ class SEQ(nn.Module):
 
     def forward(self, seq, seq_lengths=None):
         if self.seq_type == 'mlp':
-            return self.rnn(seq.squeeze(1))
+            return self.rnn(seq.squeeze(1).float())
         elif self.seq_type == 'tf':
             return self.transformer(seq)
         else:
@@ -419,6 +419,11 @@ class SEQ(nn.Module):
 
 
 class VoxPeptide(nn.Module):
+    """
+    Voxel-only Peptide Identification Model.
+    
+    Uses 3D CNN (ResNet) to process voxelized peptide structures.
+    """
     def __init__(self, v_encoder='resnet26', q_encoder='mlp', fusion='mlp', classes=6, attention=None):
         super().__init__()
 
@@ -439,13 +444,18 @@ class VoxPeptide(nn.Module):
         self.vox_fc = nn.Linear(2048, classes)
 
     def forward(self, x, seq_lengths=None):
-        vox, seq, _ = x
+        vox, seq = x
         seq_emb = self.v_encoder(vox)
         pred = self.vox_fc(seq_emb)
         return pred
 
 
 class SEQPeptide(nn.Module):
+    """
+    Sequence-only Peptide Identification Model.
+    
+    Uses sequence encoders (RNN, LSTM, Transformer, etc.) to process peptide sequences.
+    """
     def __init__(self, v_encoder='resnet26', q_encoder='mlp', fusion='mlp', classes=6, attention=None):
         super().__init__()
 
@@ -462,11 +472,14 @@ class SEQPeptide(nn.Module):
         self.vox_fc = nn.Linear(2048, classes)
         self.seq_fc = nn.Linear(256, classes)
 
-    def forward(self, x, seq_lengths=None):
+    def forward(self, x, seq_lengths=None, return_feature=False):
         vox, seq = x
         seq_emb = self.q_encoder(seq, seq_lengths)
         pred = self.seq_fc(seq_emb)
-        return pred
+        if return_feature:
+            return pred, seq_emb
+        else:
+            return pred
 
 import torch
 import torch.nn as nn
@@ -518,6 +531,12 @@ class ConvNet2D(nn.Module):
 # convnet = ConvNet()
 # print(convnet)
 class MMPeptide(nn.Module):
+    """
+    Multimodal Peptide Identification Model (MMPeptide).
+    
+    fuses features from both voxel (ResNet) and sequence (RNN/Transformer) encoders
+    for property prediction.
+    """
     def __init__(self, v_encoder='resnet26', q_encoder='mlp', fusion='mlp', classes=6, attention=None):
         super().__init__()
         if attention == 'hamburger':
@@ -562,9 +581,15 @@ class MMPeptide(nn.Module):
         # pred2 = self.seq_fc(seq_emb)
         # return pred, fused_feature
 
-        return pred
+        return pred, fused_feature
 
 class MMFPeptide(nn.Module):
+    """
+    Multimodal Fusion Peptide Identification Model.
+    
+    Similar to MMPeptide but with a specific architecture for fusion where 
+    voxel features are conditioned on sequence embeddings in some variations.
+    """
     def __init__(self, v_encoder='resnet26', q_encoder='mlp', fusion='mlp', classes=6, attention=None):
         super().__init__()
         if attention == 'hamburger':
