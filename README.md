@@ -153,7 +153,7 @@ Pre-trained model checkpoints are available for download to facilitate quick exp
 
 ## Results
 
-The M3-CAD pipeline has successfully designed **QL-AMP-1**, an AMP with four distinct antimicrobial mechanisms. This peptide demonstrates:
+The M3-CAD pipeline has successfully designed **QLX-3DV-1** to **QLX-3DV-20** , a group of AMP with four distinct antimicrobial mechanisms. This peptide demonstrates:
 - **Low Toxicity**: Minimal adverse effects on host cells.
 - **High Efficacy**: Significant activity against MDROs.
 - **In Vivo Validation**: In a skin wound infection model, QL-AMP-1 exhibited considerable antimicrobial effects with negligible toxicity, underscoring its therapeutic potential.
