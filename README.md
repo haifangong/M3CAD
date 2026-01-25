@@ -15,7 +15,7 @@ The repository is structured into two main modules:
 
 ## 🚀 Getting Started
 
-By integrating these modules, M3-CAD significantly enhances the structural characterization and functional prediction of AMPs, facilitating the discovery of candidates like **QL-AMP-1**, which exhibits four antimicrobial mechanisms with low toxicity and high efficacy against MDROs.
+By integrating these modules, M3-CAD significantly enhances the structural characterization and functional prediction of AMPs, facilitating the discovery of candidates like **QLX-3DV-1 TO 20**, which exhibits four antimicrobial mechanisms with low toxicity and high efficacy against MDROs.
 
 ### Requirements
 
