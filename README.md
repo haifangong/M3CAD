@@ -162,12 +162,12 @@ The M3-CAD pipeline has successfully designed **QLX-3DV-1** to **QLX-3DV-20** , 
 
 If you find this project useful, please consider cite the following paper:
 ```
-@article{wang2024novo,
-    title={De novo multi-mechanism antimicrobial peptide design via multimodal deep learning},
-    author={Wang, Yue and Gong, Haifan and Li, Xiaojuan and Li, Lixiang and Zhao, Yinuo and Bao, Peijing and Kong, Qingzhou and Wan, Boyao and Zhang, Yumeng and Zhang, Jinghui and others},
-    journal={bioRxiv},
-    pages={2024--01},
-    year={2024},
-    publisher={Cold Spring Harbor Laboratory}
+@article{li2026novo,
+  title={De Novo Multi-Mechanism Antimicrobial Peptide Design via Multimodal Deep Learning},
+  author={Li, Xiaojuan and Gong, Haifan and Wang, Yue and Zhao, Yinuo and Li, Lixiang and Bao, Peijing and Kong, Qingzhou and Fu, Jialu and Wan, Boyao and Zhang, Yumeng and others},
+  journal={Advanced Science},
+  pages={e15835},
+  year={2026},
+  publisher={Wiley Online Library}
 }
 ```
